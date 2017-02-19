@@ -7,8 +7,16 @@ Created on Wed Feb  8 14:03:08 2017
 import tensorflow as tf
 import numpy as np
 import math
+import os
+import time
 # Get the Data
 from tensorflow.examples.tutorials.mnist import input_data
+
+def SetFolders(SummariesPath):
+    subFolders = ('','Train','Validation','Test')
+    for i in range(4):
+        if not os.path.exists(SummariesPath + subFolders[i]):
+            os.makedirs(SummariesPath + subFolders[i])
 
 def variable_summaries(var, name):
   """Attach a lot of summaries to a Tensor."""
@@ -63,12 +71,17 @@ def NNLayer(InputTensor, InputDim, OutputDim, LayerName, ActivationType = tf.nn.
     return activations            
     
 mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
-SummariesDirectory = "C:/Users/Itzik/Google Drive/Research/Python Files/TensorFlow Tutorials/Summaries"
+
 BatchSize = 50
 nEpochs = 100
 nTrainImages = len(mnist.train.images)
 Image_size = np.sqrt(len(mnist.train.images[0]))
 nIterations = math.ceil(nTrainImages/BatchSize)
+Summaries_Path = "Summaries/"
+SetFolders(Summaries_Path)
+CheckPointFilename = "CheckPoints/"
+if not os.path.exists(CheckPointFilename):
+    os.makedirs(CheckPointFilename)
 
 sess = tf.InteractiveSession()
 
@@ -105,7 +118,7 @@ with tf.name_scope('Output'):
 
 #Computing the prediction and accuracy
     with tf.name_scope('cross_entropy'):
-          cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_conv, y_))
+          cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits = y_conv,labels = y_))
     cross_entropy_summary = tf.summary.scalar('cross entropy', cross_entropy)
 
     train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
@@ -125,16 +138,16 @@ merged_summary = tf.summary.merge([accuracy_summary, cross_entropy_summary])
 sess.run(tf.global_variables_initializer())
 
 saver = tf.train.Saver(max_to_keep=3)
-CeckPointFilename = "C:/Users/Itzik/Google Drive/Research/Python Files/TensorFlow Tutorials/CheckPoints/MNIST-model"
-Summaries_Path = "C:/Users/Itzik/Google Drive/Research/Python Files/TensorFlow Tutorials/Summaries/"
-#merged = tf.merge_all_summaries() #merge all summaries
 train_writer = tf.summary.FileWriter(Summaries_Path + 'train')
 validation_writer = tf.summary.FileWriter(Summaries_Path + 'validation')
 test_writer = tf.summary.FileWriter(Summaries_Path + 'test')
 file_writer = tf.summary.FileWriter(Summaries_Path, sess.graph)
+merged = tf.summary.merge_all() #merge all summaries
 
+startTime = time.time()
 #Training - may take a long time to complete
 for iEpoch in range(nEpochs):
+    epochStart = time.time()
     for i in range(nIterations):
         batch = mnist.train.next_batch(BatchSize)
         train_step.run(feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
@@ -144,18 +157,22 @@ for iEpoch in range(nEpochs):
             test_ce, test_acc, test_summ = sess.run([cross_entropy, accuracy, merged_summary], feed_dict={x :  mnist.test.images, y_ : mnist.test.labels, keep_prob: 1.0})
             print("Epoch %d, step %d, training accuracy %g"%(iEpoch,i, train_accuracy))
             print("Epoch %d, step %d, validation accuracy %g"%(iEpoch,i, Validation_acc)) 
-            print("Epoch %d, step %d, test accuracy %g"%(iEpoch, i, test_acc))  
-          
+            print("Epoch %d, step %d, test accuracy %g"%(iEpoch, i, test_acc))
+
+    print("Finished an Epoch")
     train_ce, train_accuracy, train_summ = sess.run([cross_entropy, accuracy, merged_summary], feed_dict={x : batch[0], y_ : batch[1], keep_prob: 1.0})
     train_writer.add_summary(train_summ, iEpoch)
     validation_ce, Validation_acc, Validation_summ = sess.run([cross_entropy, accuracy, merged_summary], feed_dict={x : mnist.validation.images, y_ : mnist.validation.labels, keep_prob: 1.0})
     validation_writer.add_summary(Validation_summ, iEpoch)
     test_ce, test_acc, test_summ = sess.run([cross_entropy, accuracy, merged_summary], feed_dict={x :  mnist.test.images, y_ : mnist.test.labels, keep_prob: 1.0})
     test_writer.add_summary(test_summ, iEpoch)
-    print("Finished an Epoch")
     print("Epoch %d, training accuracy %g"%(iEpoch, train_accuracy))
-    print("Epoch %d, validation accuracy %g"%(iEpoch, Validation_acc)) 
-    print("Epoch %d, test accuracy %g"%(iEpoch, test_acc))        
-    saver.save(sess, CeckPointFilename , global_step = i + iEpoch*nIterations)
+    print("Epoch %d, validation accuracy %g"%(iEpoch, Validation_acc))
+    print("Epoch %d, test accuracy %g"%(iEpoch, test_acc))
+    saver.save(sess, CheckPointFilename + "MNIST-Model" , global_step = i + iEpoch*nIterations)
+    epochEndTime = time.time()
+    print("Epoch %d time:  %d seconds"%(iEpoch,epochEndTime - epochStart))
 
 print("test accuracy %g"%accuracy.eval(feed_dict={ x: mnist.test.images, y_: mnist.test.labels, keep_prob: 1.0}))
+endTime = time.time()
+print("Total time: %d seconds"%(endTime - startTime))
